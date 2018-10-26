@@ -9,7 +9,7 @@ import cv2
 
 ########
 #Name of image should be "name of game without . and -" + "-" + nb columns + "-" + nb rows + extension
-current_img = "secrethitler-4-3.jpg"
+current_img = "minirogue-3-2.jpg"
 ########
 dir_img = "image"
 #default if not in name
