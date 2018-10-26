@@ -9,20 +9,23 @@ import cv2
 
 ########
 #Name of image should be "name of game without . and -" + "-" + nb columns + "-" + nb rows + extension
-current_img = "minirogue-3-2.jpg"
+current_img = "minirogue-3-3.png"
 ########
 dir_img = "image"
 #default if not in name
 nb_row = 7
 nb_col = 10
 
+if not os.path.exists(dir_img + "/" + current_img):
+    raise Exception("Image not found !",dir_img + "/" + current_img)
+    
 #Extract name of image, extension, col/row and create dir if needed to save results
 name = current_img.split(".")[0]
 extension = current_img.split(".")[-1]
 if "-" in current_img:
     nb_col=int(current_img.split("-")[1])
     nb_row=int(current_img.split("-")[2].split(".")[0])
-    
+
 if not os.path.exists(dir_img+"/"+name):
     os.mkdir(dir_img+"/"+name)
 

@@ -4,9 +4,11 @@ Created on Thu Oct 25 20:00:51 2018
 
 @author: lambe
 """
+import os
 import numpy as np
 import cv2
 from PIL import Image
+from scipy import ndimage
 
 #300 DPI
 page_size = 2480,3508       #210mm x 297mm (A4 width x height)
@@ -48,6 +50,7 @@ smax9cards = 758,758         #loss:343 #order:3x3
 #Create empty page
 def initialize_new_page():
     img = np.zeros((page_size[1],page_size[0],4),np.uint8)
+    #img[:,:,:] = 255 #white
     img[:,:,3] = 255
     return img
 
@@ -57,9 +60,19 @@ def save_img(img, path="image/planche.png"):
     im = Image.open(path)
     im.save(path, dpi=(300,300))
 
+def rotate_image(img,angle):
+    return ndimage.rotate(img, angle)
+
 #Load an image from disk and resize it to prefered size
-def load_resize_img(path,wanted_size):
+def load_resize_img(path,wanted_size=mycards):
+    if not os.path.exists(path):
+        raise Exception("Image not found !",path)
     img = cv2.imread(path)
+    h,w,d = img.shape
+    if wanted_size[0] > wanted_size[1] and w < h:
+        img = rotate_image(img,90)
+    elif wanted_size[0] < wanted_size[1] and w > h:
+        img = rotate_image(img,90)
     img = cv2.resize(img,wanted_size)
     return img
 
@@ -146,9 +159,47 @@ def pixels_to_cm(pi):
     
 def cm_to_pixels(cm):
     return cm*10*2480/210
-  
+
+def calculate_x_z_positions_page(nb_col,nb_row,card_size=mycards):
+    dist_marg_left = page_size[0] - margins[0]*2 - card_size[0]*nb_col - ecart*(nb_col - 1)
+    dist_marg_left = int(dist_marg_left/2)
+    dist_marg_top = page_size[1] - margins[1]*2 - card_size[1]*nb_row - ecart*(nb_row - 1)
+    dist_marg_top = int(dist_marg_top/2)
+    x = [margins[0] + dist_marg_left + card_size[0]*i + ecart*i for i in range(nb_col)]
+    z = [margins[1] + dist_marg_top + card_size[1]*i + ecart*i for i in range(nb_row)]
+    return x, z
+
+def fill_page_with_cards(p,images,nb_cards_per_page=10,card_size=mycards,wanted_ratio=1.5446, repeat_image=False, generate_at_fixed_size=True):
+    if generate_at_fixed_size is not False:
+        #Case nb cards per page
+        cs,order=best_card_size_for_maxXcards(nb_cards_per_page,wanted_ratio=wanted_ratio)
+        card_size = map_tuple_gen(int,cs[0])
+    else:
+        #Case fixed size
+        order=calculate_cards_per_page(card_size=card_size)
+    
+    nb_col,nb_row = order
+    cpt = 0
+    x,z = calculate_x_z_positions_page(nb_col,nb_row,card_size=card_size)
+    for k in range(len(z)):
+        for j in range(len(x)):
+            if cpt >= len(images) and not repeat_image:
+                break
+            elif cpt >= len(images):
+                cpt = 0
+            i = load_resize_img(images[cpt],card_size)
+            a = x[j]
+            b = z[k]
+            p = include_img_in_page(i,p,a,b)
+            cpt += 1
+    return p
+        
+
+
 p = initialize_new_page()
-i = load_resize_img("include.jpg",mycards)
-x,z = 50,500
-p = include_img_in_page(i,p,x,z)
+images = ["image/minirogue-3-3/minirogue-3-3_col-0_row-0.png","image/minirogue-3-3/minirogue-3-3_col-0_row-1.png","image/minirogue-3-3/minirogue-3-3_col-0_row-2.png","image/minirogue-3-3/minirogue-3-3_col-1_row-0.png","image/minirogue-3-3/minirogue-3-3_col-1_row-1.png","image/minirogue-3-3/minirogue-3-3_col-2_row-0.png"]
+p = fill_page_with_cards(p,images,generate_at_fixed_size=True,card_size=mycards,nb_cards_per_page=10,repeat_image=False)
 save_img(p)
+
+#tracer les lignes
+#mettre les images dans le bon sens
