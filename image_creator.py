@@ -50,8 +50,8 @@ smax9cards = 758,758         #loss:343 #order:3x3
 #Create empty page
 def initialize_new_page():
     img = np.zeros((page_size[1],page_size[0],4),np.uint8)
-    #img[:,:,:] = 255 #white
-    img[:,:,3] = 255
+    img[:,:,:] = 255 #white
+    #img[:,:,3] = 255 #black
     return img
 
 #Save planche at 300dpi
@@ -64,15 +64,18 @@ def rotate_image(img,angle):
     return ndimage.rotate(img, angle)
 
 #Load an image from disk and resize it to prefered size
-def load_resize_img(path,wanted_size=mycards):
+def load_resize_img(path,wanted_size=mycards,symmetry=False):
     if not os.path.exists(path):
         raise Exception("Image not found !",path)
     img = cv2.imread(path)
     h,w,d = img.shape
+    angle=90
+    if symmetry:
+        angle = -90
     if wanted_size[0] > wanted_size[1] and w < h:
-        img = rotate_image(img,90)
+        img = rotate_image(img,angle)
     elif wanted_size[0] < wanted_size[1] and w > h:
-        img = rotate_image(img,90)
+        img = rotate_image(img,angle)
     img = cv2.resize(img,wanted_size)
     return img
 
@@ -169,7 +172,7 @@ def calculate_x_z_positions_page(nb_col,nb_row,card_size=mycards):
     z = [margins[1] + dist_marg_top + card_size[1]*i + ecart*i for i in range(nb_row)]
     return x, z
 
-def fill_page_with_cards(p,images,nb_cards_per_page=10,card_size=mycards,wanted_ratio=1.5446, repeat_image=False, generate_at_fixed_size=True):
+def fill_page_with_cards(p,images,nb_cards_per_page=10,card_size=mycards,wanted_ratio=1.5446, repeat_image=False, generate_at_fixed_size=True, symmetry=False, add_layout=True, color_layout=(255,0,0)):
     if generate_at_fixed_size is not False:
         #Case nb cards per page
         cs,order=best_card_size_for_maxXcards(nb_cards_per_page,wanted_ratio=wanted_ratio)
@@ -187,19 +190,52 @@ def fill_page_with_cards(p,images,nb_cards_per_page=10,card_size=mycards,wanted_
                 break
             elif cpt >= len(images):
                 cpt = 0
-            i = load_resize_img(images[cpt],card_size)
-            a = x[j]
+            i = load_resize_img(images[cpt],card_size,symmetry=symmetry)
+            horizontal_position = j
+            if symmetry:
+                horizontal_position = len(x)-j-1
+            a = x[horizontal_position]
             b = z[k]
             p = include_img_in_page(i,p,a,b)
             cpt += 1
+    if add_layout:
+        p = add_grid_layout(x,z,p, color_layout=color_layout)
     return p
         
+def add_grid_layout(x,z,p,color_layout=(255,0,0)):
+    for k in range(len(z)+1):
+        zmin = 0
+        zmax = page_size[0]-1
+        if k == len(z):
+            xmin = page_size[1]-z[0]-2
+            xmax = page_size[1]-z[0]-1
+        else:
+            xmin = z[k]-2
+            xmax = z[k]-1
+        p[xmin:xmax,zmin:zmax,0:1] = color_layout[2] #blue -> triplet rgb
+        p[xmin:xmax,zmin:zmax,1:2] = color_layout[1] #green -> triplet rgb
+        p[xmin:xmax,zmin:zmax,2:3] = color_layout[0] #red -> triplet rgb
+    for j in range(len(x)+1):
+        xmin = 0
+        xmax = page_size[1]-1
+        if j == len(x):
+            zmin = page_size[0]-x[0]-2
+            zmax = page_size[0]-x[0]-1
+        else:
+            zmin = x[j]-2
+            zmax = x[j]-1
+        p[xmin:xmax,zmin:zmax,0:1] = color_layout[2] #blue -> triplet rgb
+        p[xmin:xmax,zmin:zmax,1:2] = color_layout[1] #green -> triplet rgb
+        p[xmin:xmax,zmin:zmax,2:3] = color_layout[0] #red -> triplet rgb
+    return p
 
-
+#########################
 p = initialize_new_page()
-images = ["image/minirogue-3-3/minirogue-3-3_col-0_row-0.png","image/minirogue-3-3/minirogue-3-3_col-0_row-1.png","image/minirogue-3-3/minirogue-3-3_col-0_row-2.png","image/minirogue-3-3/minirogue-3-3_col-1_row-0.png","image/minirogue-3-3/minirogue-3-3_col-1_row-1.png","image/minirogue-3-3/minirogue-3-3_col-2_row-0.png"]
-p = fill_page_with_cards(p,images,generate_at_fixed_size=True,card_size=mycards,nb_cards_per_page=10,repeat_image=False)
-save_img(p)
-
-#tracer les lignes
-#mettre les images dans le bon sens
+folder = "image/minirogue-3-3/"
+images=[]
+for name in os.listdir(folder):
+    images.append(folder+name)
+p = fill_page_with_cards(p,images,generate_at_fixed_size=True,
+                         card_size=mycards,nb_cards_per_page=10,
+                         repeat_image=False, symmetry=False, add_layout=True, color_layout=(255,0,0))  
+save_img(p,path="image/planche.png")
