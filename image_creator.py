@@ -140,17 +140,41 @@ def best_card_size_for_maxXcards(maxXcards,wanted_ratio=None):
             best_order = (d,i)
     return best_card, best_order
 
+def calculate_cards_per_page_for_fixed_size(nb_cards,card_size):
+    need_rotation = False
+    for i in divisorGenerator(nb_cards):
+        d = int(nb_cards/i)
+        total_width = card_size[0]*d + (d-1)*ecart + 2*margins[0]
+        total_height = card_size[1]*i + (i-1)*ecart + 2*margins[1]
+        if total_width <= page_size[0] and total_height <= page_size[1]:
+            return d,i,need_rotation
+        
+    card_size = (card_size[1],card_size[0])
+    need_rotation = True
+    for i in divisorGenerator(nb_cards):
+        d = int(nb_cards/i)
+        total_width = card_size[0]*d + (d-1)*ecart + 2*margins[0]
+        total_height = card_size[1]*i + (i-1)*ecart + 2*margins[1]
+        if total_width <= page_size[0] and total_height <= page_size[1]:
+            return d,i,need_rotation
+    raise Exception("Impossible to get that many cards for this size ! Sorry !")
+
 def calculate_cards_per_page(card_size=mycards):
     w,h = card_size
     max_width = page_size[0] - 2*margins[0]
     max_height = page_size[1] - 2*margins[1]
-    horizontal_layout_w = max_width/w
-    horizontal_layout_h = max_height/h
-    nb_cards_horizontal_layout = int(horizontal_layout_w)*int(horizontal_layout_h)
-    vertical_layout_w = max_height/w
-    vertical_layout_h = max_width/h
-    nb_cards_vertical_layout = int(vertical_layout_w)*int(vertical_layout_h)
-    return nb_cards_horizontal_layout, nb_cards_vertical_layout
+    hl_w = int(max_width/w)
+    hl_h = int(max_height/h)
+    nb_cards_horizontal_layout = hl_w*hl_h
+    vl_w = int(max_height/w)
+    vl_h = int(max_width/h)
+    nb_cards_vertical_layout = vl_w*vl_h
+    need_rotation = False
+    if nb_cards_horizontal_layout >= nb_cards_vertical_layout:
+        return hl_h,hl_w,need_rotation
+    else:
+        need_rotation = True
+        return vl_h, vl_w,need_rotation
 
 def map_tuple_gen(func, tup):
     return tuple(func(itup) for itup in tup)
@@ -170,36 +194,40 @@ def calculate_x_z_positions_page(nb_col,nb_row,card_size=mycards):
     z = [margins[1] + dist_marg_top + card_size[1]*i + ecart*i for i in range(nb_row)]
     return x, z
 
-def fill_page_with_cards(p,images,nb_cards_per_page=10,card_size=mycards,wanted_ratio=1.5446, repeat_image=False, generate_at_fixed_size=True, symmetry=False, add_layout=True, color_layout=(255,0,0), start_image=0):
+def fill_page_with_cards(p,images,parameters, start_image=0):
     images = images[start_image:]
-    if generate_at_fixed_size is not False:
-        #Case nb cards per page
-        cs,order=best_card_size_for_maxXcards(nb_cards_per_page,wanted_ratio=wanted_ratio)
+    card_size = parameters["card_size"]
+    if parameters["type_generation"] == "apply_parameters":
+        nb_col,nb_row,need_rotation=calculate_cards_per_page_for_fixed_size(parameters["nb_cards_per_page"],card_size)
+        if need_rotation:
+            card_size = (card_size[1],card_size[0])
+    elif parameters["type_generation"] == "optimize_nb_for_cardsize":
+        nb_col,nb_row,need_rotation=calculate_cards_per_page(card_size=card_size)
+        if need_rotation:
+            card_size = (card_size[1],card_size[0])
+    elif parameters["type_generation"] == "optimize_cardsize_for_nb":
+        cs,(nb_col,nb_row)=best_card_size_for_maxXcards(parameters["nb_cards_per_page"],wanted_ratio=parameters["wanted_ratio"])
         card_size = map_tuple_gen(int,cs[0])
-    else:
-        #Case fixed size
-        order=calculate_cards_per_page(card_size=card_size)
     
-    nb_col,nb_row = order
     cpt = 0
     x,z = calculate_x_z_positions_page(nb_col,nb_row,card_size=card_size)
     for k in range(len(z)):
         for j in range(len(x)):
-            if cpt >= len(images) and not repeat_image:
+            if cpt >= len(images) and not parameters["repeat_image"]:
                 break
             elif cpt >= len(images):
                 cpt = 0
-            i = load_resize_img(images[cpt],card_size,symmetry=symmetry)
+            i = load_resize_img(images[cpt],card_size,symmetry=parameters["symmetry"])
             horizontal_position = j
-            if symmetry:
+            if parameters["symmetry"]:
                 horizontal_position = len(x)-j-1
             a = x[horizontal_position]
             b = z[k]
             p = include_img_in_page(i,p,a,b)
             cpt += 1
-    if add_layout:
-        p = add_grid_layout(x,z,p, color_layout=color_layout)
-    return p, order[0]*order[1]
+    if parameters["add_layout"]:
+        p = add_grid_layout(x,z,p, color_layout=parameters["color_layout"])
+    return p, nb_col*nb_row
         
 def add_grid_layout(x,z,p,color_layout=(255,0,0)):
     for k in range(len(z)+1):
@@ -231,17 +259,22 @@ def add_grid_layout(x,z,p,color_layout=(255,0,0)):
 def generate_pages_with_images(parameters, images, verso=False):
     nb_cards_generated = 0
     cpt = 0
-    repeat_image=parameters["repeat_image"] if not verso else True
-    symmetry=parameters["symmetry"] if not verso else True
+    if verso:
+        params = copy.deepcopy(parameters)
+        params["repeat_image"] = True
+        params["symmetry"] = True
+    else:
+        params = parameters
     while nb_cards_generated < len(images):
         name = parameters["planche"].split(".")[0]+"_"+str(cpt)+"."+parameters["planche"].split(".")[1]
         p = initialize_new_page()
-        p,nb = fill_page_with_cards(p,images,start_image=nb_cards_generated,generate_at_fixed_size=parameters["generate_at_fixed_size"],card_size=parameters["card_size"],nb_cards_per_page=parameters["nb_cards_per_page"],repeat_image=repeat_image, wanted_ratio=parameters["wanted_ratio"],symmetry=symmetry, add_layout=parameters["add_layout"], color_layout=parameters["color_layout"])  
+        p,nb = fill_page_with_cards(p,images,params,start_image=nb_cards_generated)  
         save_img(p,path=name)
         nb_cards_generated += nb
         cpt += 1
     return p
 
+#Splits cards names depending on nb of recto/verso "recto1 (X).png and verso1 (X).png"
 def get_all_images(folder):
     cartes_recto={}
     cartes_verso={}
@@ -283,13 +316,18 @@ def generate_all_pages(parameters):
 parameters_default={
         "folder_source_image"   : "image/secrethitler-4-3/", #source
         "planche"               : "image/planche.png", #result
-        "generate_at_fixed_size": True,
+        
+        #optimize_cardsize_for_nb #optimize_nb_for_cardsize #apply_parameters
+        "type_generation"       : "optimize_nb_for_cardsize",
         "card_size"             : mycards,
-        "nb_cards_per_page"     : 10, #used only if generate_at_fixed_size == False
+        "nb_cards_per_page"     : 20, #used only if generate_at_fixed_size == False
+        
         "repeat_image"          : False, #loop over images in folder to fill the page
         "symmetry"              : False, #for "verso", turn all images to the right instead of left
+        
         "add_layout"            : True, #add the grid for printing
         "color_layout"          : (255,0,0), #red grid
+        
         "wanted_ratio"          : 1.5446 #ratio width/height, used only if generate_at_fixed_size == False
         }
 ###
