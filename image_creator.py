@@ -8,7 +8,7 @@ import os
 import numpy as np
 import cv2
 from PIL import Image
-from scipy import ndimage
+import copy
 
 #300 DPI
 page_size = 2480,3508       #210mm x 297mm (A4 width x height)
@@ -60,8 +60,11 @@ def save_img(img, path="image/planche.png"):
     im = Image.open(path)
     im.save(path, dpi=(300,300))
 
-def rotate_image(img,angle):
-    return ndimage.rotate(img, angle)
+def rotate_image(img,symmetry=False):
+    if symmetry:
+        return img.swapaxes(1,0)[:,::-1,:]
+    else:
+        return img.swapaxes(1,0)[::-1,:,:]
 
 #Load an image from disk and resize it to prefered size
 def load_resize_img(path,wanted_size=mycards,symmetry=False):
@@ -69,13 +72,8 @@ def load_resize_img(path,wanted_size=mycards,symmetry=False):
         raise Exception("Image not found !",path)
     img = cv2.imread(path)
     h,w,d = img.shape
-    angle=90
-    if symmetry:
-        angle = -90
-    if wanted_size[0] > wanted_size[1] and w < h:
-        img = rotate_image(img,angle)
-    elif wanted_size[0] < wanted_size[1] and w > h:
-        img = rotate_image(img,angle)
+    if (wanted_size[0] > wanted_size[1] and w < h) or (wanted_size[0] < wanted_size[1] and w > h):
+        img = rotate_image(img,symmetry=symmetry)
     img = cv2.resize(img,wanted_size)
     return img
 
@@ -172,7 +170,8 @@ def calculate_x_z_positions_page(nb_col,nb_row,card_size=mycards):
     z = [margins[1] + dist_marg_top + card_size[1]*i + ecart*i for i in range(nb_row)]
     return x, z
 
-def fill_page_with_cards(p,images,nb_cards_per_page=10,card_size=mycards,wanted_ratio=1.5446, repeat_image=False, generate_at_fixed_size=True, symmetry=False, add_layout=True, color_layout=(255,0,0)):
+def fill_page_with_cards(p,images,nb_cards_per_page=10,card_size=mycards,wanted_ratio=1.5446, repeat_image=False, generate_at_fixed_size=True, symmetry=False, add_layout=True, color_layout=(255,0,0), start_image=0):
+    images = images[start_image:]
     if generate_at_fixed_size is not False:
         #Case nb cards per page
         cs,order=best_card_size_for_maxXcards(nb_cards_per_page,wanted_ratio=wanted_ratio)
@@ -200,7 +199,7 @@ def fill_page_with_cards(p,images,nb_cards_per_page=10,card_size=mycards,wanted_
             cpt += 1
     if add_layout:
         p = add_grid_layout(x,z,p, color_layout=color_layout)
-    return p
+    return p, order[0]*order[1]
         
 def add_grid_layout(x,z,p,color_layout=(255,0,0)):
     for k in range(len(z)+1):
@@ -229,13 +228,69 @@ def add_grid_layout(x,z,p,color_layout=(255,0,0)):
         p[xmin:xmax,zmin:zmax,2:3] = color_layout[0] #red -> triplet rgb
     return p
 
+def generate_pages_with_images(parameters, images, verso=False):
+    nb_cards_generated = 0
+    cpt = 0
+    repeat_image=parameters["repeat_image"] if not verso else True
+    symmetry=parameters["symmetry"] if not verso else True
+    while nb_cards_generated < len(images):
+        name = parameters["planche"].split(".")[0]+"_"+str(cpt)+"."+parameters["planche"].split(".")[1]
+        p = initialize_new_page()
+        p,nb = fill_page_with_cards(p,images,start_image=nb_cards_generated,generate_at_fixed_size=parameters["generate_at_fixed_size"],card_size=parameters["card_size"],nb_cards_per_page=parameters["nb_cards_per_page"],repeat_image=repeat_image, wanted_ratio=parameters["wanted_ratio"],symmetry=symmetry, add_layout=parameters["add_layout"], color_layout=parameters["color_layout"])  
+        save_img(p,path=name)
+        nb_cards_generated += nb
+        cpt += 1
+    return p
+
+def get_all_images(folder):
+    cartes_recto={}
+    cartes_verso={}
+    for name in os.listdir(folder):
+        if name.startswith("recto"):
+            numero_recto = name.split(" ")[0].split("recto")[1]
+            if "." in numero_recto:
+                numero_recto = numero_recto.split(".")[0]
+            if numero_recto in cartes_recto:
+                cartes_recto[numero_recto].append(folder+name)
+            else:
+                cartes_recto[numero_recto] = [folder+name]
+        elif name.startswith("verso"):
+            numero_verso = name.split(" ")[0].split("verso")[1]
+            if "." in numero_verso:
+                numero_verso = numero_verso.split(".")[0]
+            if numero_verso in cartes_verso:
+                cartes_verso[numero_verso].append(folder+name)
+            else:
+                cartes_verso[numero_verso] = [folder+name]
+    return cartes_recto, cartes_verso
+
+def generate_all_pages(parameters):
+    cartes_recto, cartes_verso = get_all_images(parameters["folder_source_image"])
+    planche = parameters["planche"].split(".")[0]
+    extension = parameters["planche"].split(".")[1]
+    for key, value in cartes_recto.items():
+        images_recto = value
+        images_verso = cartes_verso[key]
+        #recto
+        parameters["planche"] = planche + "_recto_" + str(key) + "." + extension
+        generate_pages_with_images(parameters,images_recto)
+        #verso
+        parameters["planche"] = planche + "_verso_" + str(key) + "." + extension
+        generate_pages_with_images(parameters,images_verso, verso=True)
+        
+
 #########################
-p = initialize_new_page()
-folder = "image/minirogue-3-3/"
-images=[]
-for name in os.listdir(folder):
-    images.append(folder+name)
-p = fill_page_with_cards(p,images,generate_at_fixed_size=True,
-                         card_size=mycards,nb_cards_per_page=10,
-                         repeat_image=False, symmetry=False, add_layout=True, color_layout=(255,0,0))  
-save_img(p,path="image/planche.png")
+parameters_default={
+        "folder_source_image"   : "image/secrethitler-4-3/", #source
+        "planche"               : "image/planche.png", #result
+        "generate_at_fixed_size": True,
+        "card_size"             : mycards,
+        "nb_cards_per_page"     : 10, #used only if generate_at_fixed_size == False
+        "repeat_image"          : False, #loop over images in folder to fill the page
+        "symmetry"              : False, #for "verso", turn all images to the right instead of left
+        "add_layout"            : True, #add the grid for printing
+        "color_layout"          : (255,0,0), #red grid
+        "wanted_ratio"          : 1.5446 #ratio width/height, used only if generate_at_fixed_size == False
+        }
+###
+generate_all_pages(parameters_default)
