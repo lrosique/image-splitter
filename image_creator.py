@@ -314,7 +314,7 @@ def generate_all_pages(parameters):
 
 #########################
 parameters_default={
-        "folder_source_image"   : "image/secrethitler-4-3/", #source
+        "folder_source_image"   : "image/minirogue-3-3/", #source
         "planche"               : "image/planche.png", #result
         
         #optimize_cardsize_for_nb #optimize_nb_for_cardsize #apply_parameters
