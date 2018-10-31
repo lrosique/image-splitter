@@ -185,16 +185,16 @@ def pixels_to_cm(pi):
 def cm_to_pixels(cm):
     return cm*10*2480/210
 
-def calculate_x_z_positions_page(nb_col,nb_row,card_size=mycards):
-    dist_marg_left = page_size[0] - margins[0]*2 - card_size[0]*nb_col - ecart*(nb_col - 1)
+def calculate_x_z_positions_page(nb_col,nb_row,card_size=mycards, verso=False):
+    dist_marg_left = page_size[0] - card_size[0]*nb_col - ecart*(nb_col-1)
     dist_marg_left = int(dist_marg_left/2)
-    dist_marg_top = page_size[1] - margins[1]*2 - card_size[1]*nb_row - ecart*(nb_row - 1)
+    dist_marg_top = page_size[1] - card_size[1]*nb_row - ecart*(nb_row-1)
     dist_marg_top = int(dist_marg_top/2)
-    x = [margins[0] + dist_marg_left + card_size[0]*i + ecart*i for i in range(nb_col)]
-    z = [margins[1] + dist_marg_top + card_size[1]*i + ecart*i for i in range(nb_row)]
+    x = [dist_marg_left + card_size[0]*i + ecart*i for i in range(nb_col)]
+    z = [dist_marg_top + card_size[1]*i + ecart*i for i in range(nb_row)]
     return x, z
 
-def fill_page_with_cards(p,images,parameters, start_image=0):
+def fill_page_with_cards(p,images,parameters, start_image=0, verso=False):
     images = images[start_image:]
     card_size = parameters["card_size"]
     if parameters["type_generation"] == "apply_parameters":
@@ -210,7 +210,8 @@ def fill_page_with_cards(p,images,parameters, start_image=0):
         card_size = map_tuple_gen(int,cs[0])
     
     cpt = 0
-    x,z = calculate_x_z_positions_page(nb_col,nb_row,card_size=card_size)
+    x,z = calculate_x_z_positions_page(nb_col,nb_row,card_size=card_size, verso=verso)
+    
     for k in range(len(z)):
         for j in range(len(x)):
             if cpt >= len(images) and not parameters["repeat_image"]:
@@ -232,25 +233,25 @@ def fill_page_with_cards(p,images,parameters, start_image=0):
 def add_grid_layout(x,z,p,color_layout=(255,0,0)):
     for k in range(len(z)+1):
         zmin = 0
-        zmax = page_size[0]-1
+        zmax = page_size[0]
         if k == len(z):
-            xmin = page_size[1]-z[0]-2
-            xmax = page_size[1]-z[0]-1
+            xmin = page_size[1]-z[0]
+            xmax = page_size[1]-z[0]+2
         else:
             xmin = z[k]-2
-            xmax = z[k]-1
+            xmax = z[k]
         p[xmin:xmax,zmin:zmax,0:1] = color_layout[2] #blue -> triplet rgb
         p[xmin:xmax,zmin:zmax,1:2] = color_layout[1] #green -> triplet rgb
         p[xmin:xmax,zmin:zmax,2:3] = color_layout[0] #red -> triplet rgb
     for j in range(len(x)+1):
         xmin = 0
-        xmax = page_size[1]-1
+        xmax = page_size[1]
         if j == len(x):
-            zmin = page_size[0]-x[0]-2
-            zmax = page_size[0]-x[0]-1
+            zmin = page_size[0]-x[0]
+            zmax = page_size[0]-x[0]+2
         else:
             zmin = x[j]-2
-            zmax = x[j]-1
+            zmax = x[j]
         p[xmin:xmax,zmin:zmax,0:1] = color_layout[2] #blue -> triplet rgb
         p[xmin:xmax,zmin:zmax,1:2] = color_layout[1] #green -> triplet rgb
         p[xmin:xmax,zmin:zmax,2:3] = color_layout[0] #red -> triplet rgb
@@ -268,7 +269,7 @@ def generate_pages_with_images(parameters, images, verso=False):
     while nb_cards_generated < len(images):
         name = parameters["planche"].split(".")[0]+"_"+str(cpt)+"."+parameters["planche"].split(".")[1]
         p = initialize_new_page()
-        p,nb = fill_page_with_cards(p,images,params,start_image=nb_cards_generated)  
+        p,nb = fill_page_with_cards(p,images,params,start_image=nb_cards_generated, verso=verso)  
         save_img(p,path=name)
         nb_cards_generated += nb
         cpt += 1
@@ -314,7 +315,7 @@ def generate_all_pages(parameters):
 
 #########################
 parameters_default={
-        "folder_source_image"   : "image/minirogue-3-3/", #source
+        "folder_source_image"   : "image/test/", #source
         "planche"               : "image/planche.png", #result
         
         #optimize_cardsize_for_nb #optimize_nb_for_cardsize #apply_parameters
@@ -326,7 +327,7 @@ parameters_default={
         "symmetry"              : False, #for "verso", turn all images to the right instead of left
         
         "add_layout"            : True, #add the grid for printing
-        "color_layout"          : (255,0,0), #red grid
+        "color_layout"          : (0,0,0), #red grid
         
         "wanted_ratio"          : 1.5446 #ratio width/height, used only if generate_at_fixed_size == False
         }
