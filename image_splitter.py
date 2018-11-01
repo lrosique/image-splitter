@@ -7,7 +7,7 @@ Created on Tue Oct 23 15:08:31 2018
 import os
 import cv2
 
-def split_one_image(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder=True):
+def split_one_image(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder_for_image=True):
     if not os.path.exists(dir_img + "/" + current_img):
         raise Exception("Image not found !",dir_img + "/" + current_img)
         
@@ -15,13 +15,13 @@ def split_one_image(dir_img, dir_res, current_img, nb_col, nb_row, create_subfol
     name = current_img.split(".")[0]
     extension = current_img.split(".")[-1]
     if "-" in dir_img:
-        nb_col=int(dir_res.split("-")[1])
-        nb_row=int(dir_res.split("-")[2])
+        nb_col=int(dir_img.split("/")[-1].split("-")[1])
+        nb_row=int(dir_img.split("/")[-1].split("-")[2])
     if "-" in current_img:
         nb_col=int(current_img.split("-")[1])
         nb_row=int(current_img.split("-")[2].split(".")[0].split(" ")[0])
     
-    if create_subfolder:
+    if create_subfolder_for_image:
         dir_res = dir_res+"/"+name
     if not os.path.exists(dir_res):
         os.mkdir(dir_res)
@@ -44,15 +44,20 @@ def split_one_image(dir_img, dir_res, current_img, nb_col, nb_row, create_subfol
             #Cut
             copy = copy[y_min:y_max,x_min:x_max,:]
             #Save result
-            cv2.imwrite(dir_res+"/"+name+"_col-"+str(i)+"_row-"+str(j)+"."+extension, copy)
+            cv2.imwrite(dir_res+"/"+name+"-"+str(nb_col)+"-"+str(nb_row)+"--pos_col-"+str(i)+"_pos_row-"+str(j)+"."+extension, copy)
             
     print("Finished !")
 
-def split_all_folder(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder=False):
+def split_all_folder(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder_for_image=False):
     dir_res = dir_res + "/" + dir_img.split("/")[-1]
     for img in os.listdir(dir_img):
-        current_img = img
-        split_one_image(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder=create_subfolder)
+        if "." not in img:
+            for i in os.listdir(dir_img+"/"+img):
+                current_img = i
+                split_one_image(dir_img+"/"+img, dir_res, current_img, nb_col, nb_row, create_subfolder_for_image=create_subfolder_for_image)
+        else:
+            current_img = img
+            split_one_image(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder_for_image=create_subfolder_for_image)
 
 ########
 dir_img = "image/minirogue-3-3"
@@ -68,8 +73,8 @@ nb_col = 10
 
 ###################
 ### ONE IMAGE SPLIT
-#split_one_image(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder=True)
+#split_one_image(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder_for_image=True)
     
 ####################
 ### SPLIT ALL FOLDER
-split_all_folder(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder=False)
+split_all_folder(dir_img, dir_res, current_img, nb_col, nb_row, create_subfolder_for_image=False)
