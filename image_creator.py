@@ -13,7 +13,7 @@ import copy
 #300 DPI
 page_size = 2480,3508       #210mm x 297mm (A4 width x height)
 margins = 100,100           #1mm = 59.04 (left/right x top/bottom)
-ecart = 2                   #A l'origine : 2.835
+ecart = 8                   #A l'origine : 2.835 = 12px (2480/596.28*2.835)
 
 #calculate_cards_per_page(card_size=tarot)
 #TAROT
